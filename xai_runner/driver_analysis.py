@@ -1,12 +1,41 @@
 from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Any, List
+
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
 
 LINEAR_MODEL_NAME = "LinearRegression"
 LOGISTIC_MODEL_NAME = "LogisticRegression"
+
+# Final output schemas
+LINEAR_FINAL_COLS = [
+    "model_name",
+    "transformation",
+    "target",
+    "original_variable",
+    "encoded_variable",
+    "coef",
+    "intercept",
+    "p_value",
+    "n_obs",
+    "r_squared",     
+]
+
+LOGISTIC_FINAL_COLS = [
+    "model_name",
+    "transformation",
+    "target",
+    "original_variable",
+    "encoded_variable",
+    "coef",
+    "intercept",
+    "p_value",
+    "r_squared",     
+    "n_obs",
+]
+
 
 def _extract_original_name(col: str) -> str:
     return col.split("_")[0]
@@ -18,41 +47,22 @@ def _ensure_dir(path: Path | str) -> Path:
     return path
 
 
-# def _clean_xy(
-#     x: pd.Series | pd.DataFrame,
-#     y: pd.Series | np.ndarray,
-# ) -> tuple[pd.DataFrame, pd.Series]:
-#     if isinstance(x, pd.Series):
-#         x = x.to_frame(name=x.name)
-
-#     #y = pd.Series(y, name="__target__")
-#     y = pd.Series(y, name=y.name)   
-
-#     df = pd.concat([x, y], axis=1)
-#     df = df.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
-
-#     x_clean = df.drop(columns=["__target__"])
-#     y_clean = df["__target__"]
-
-#     return x_clean, y_clean
 def _clean_xy(
     x: pd.Series | pd.DataFrame,
     y: pd.Series | np.ndarray,
 ) -> tuple[pd.DataFrame, pd.Series]:
-
     if isinstance(x, pd.Series):
         x = x.to_frame(name=x.name)
 
-    target_col = y.name          
+    target_col = y.name
 
     df = pd.concat([x, y], axis=1)
     df = df.replace([np.inf, -np.inf], np.nan).dropna(axis=0)
 
-    x_clean = df.drop(columns=[target_col])   
-    y_clean = df[target_col]                  
+    x_clean = df.drop(columns=[target_col])
+    y_clean = df[target_col]
 
     return x_clean, y_clean
-
 
 
 def run_bivariate_regression(
@@ -68,7 +78,6 @@ def run_bivariate_regression(
 
     X_raw = X_raw.copy()
     X_minmax = X_minmax.copy()
-    #y = pd.Series(y, name=target_name)
     y = pd.Series(y).rename(target_name)
 
     raw_rows: List[Dict[str, Any]] = []
@@ -80,7 +89,7 @@ def run_bivariate_regression(
             raw_rows.append(
                 {
                     "model_name": LINEAR_MODEL_NAME,
-                    "transformation": transformation_label_raw,        
+                    "transformation": transformation_label_raw,
                     "target": y.name,
                     "original_variable": _extract_original_name(col),
                     "encoded_variable": col,
@@ -90,7 +99,7 @@ def run_bivariate_regression(
                     "t_value": np.nan,
                     "p_value": np.nan,
                     "r_squared": np.nan,
-                    "adj_r_squared": np.nan,
+                    #"adj_r_squared": np.nan,
                     "n_obs": int(x_col.notna().sum()),
                     "mean_x": float(x_col.mean(skipna=True)),
                     "mean_y": float(y.mean(skipna=True)),
@@ -130,7 +139,7 @@ def run_bivariate_regression(
             raw_rows.append(
                 {
                     "model_name": LINEAR_MODEL_NAME,
-                    "transformation": transformation_label_raw,        
+                    "transformation": transformation_label_raw,
                     "target": y.name,
                     "original_variable": _extract_original_name(col),
                     "encoded_variable": col,
@@ -139,8 +148,9 @@ def run_bivariate_regression(
                     "std_err": float(std_err),
                     "t_value": float(t_value),
                     "p_value": float(p_value),
-                    "r_squared": r2,
-                    "adj_r_squared": adj_r2,
+                    #"r_squared": r2,
+                    "r_squared": adj_r2,
+                    #"adj_r_squared": adj_r2,
                     "n_obs": int(len(y_clean)),
                     "mean_x": mean_x,
                     "mean_y": mean_y,
@@ -152,7 +162,7 @@ def run_bivariate_regression(
             raw_rows.append(
                 {
                     "model_name": LINEAR_MODEL_NAME,
-                    "transformation": transformation_label_raw,       
+                    "transformation": transformation_label_raw,
                     "target": y.name,
                     "original_variable": _extract_original_name(col),
                     "encoded_variable": col,
@@ -162,7 +172,7 @@ def run_bivariate_regression(
                     "t_value": np.nan,
                     "p_value": np.nan,
                     "r_squared": np.nan,
-                    "adj_r_squared": np.nan,
+                    #"adj_r_squared": np.nan,
                     "n_obs": int(x_col.notna().sum()),
                     "mean_x": float(x_col.mean(skipna=True)),
                     "mean_y": float(y.mean(skipna=True)),
@@ -175,11 +185,16 @@ def run_bivariate_regression(
 
     if "p_value" in raw_df.columns:
         raw_df["__p_sort__"] = raw_df["p_value"].fillna(1e9)
-        raw_df = raw_df.sort_values("__p_sort__").drop(columns="__p_sort__").reset_index(drop=True)
+        raw_df = (
+            raw_df.sort_values("__p_sort__")
+            .drop(columns="__p_sort__")
+            .reset_index(drop=True)
+        )
 
-    raw_path = out_dir / "regression_linear_coefficients.csv"
-    raw_df.to_csv(raw_path, index=False)
-    print(f"Saved OLS regression coefficients (RAW, BIVARIATE) to: {raw_path}")
+    raw_path = out_dir / "driver_analysis_coefficients.csv"
+    raw_df_final = raw_df[LINEAR_FINAL_COLS]
+    raw_df_final.to_csv(raw_path, index=False)
+    print(f"Saved driver analysis coefficients (RAW) to: {raw_path}")
 
     mm_rows: List[Dict[str, Any]] = []
 
@@ -190,8 +205,8 @@ def run_bivariate_regression(
             mm_rows.append(
                 {
                     "model_name": LINEAR_MODEL_NAME,
-                    "transformation": transformation_label_mm,         
-                    "target": y.name, 
+                    "transformation": transformation_label_mm,
+                    "target": y.name,
                     "original_variable": _extract_original_name(col),
                     "encoded_variable": col,
                     "coef": np.nan,
@@ -200,7 +215,7 @@ def run_bivariate_regression(
                     "t_value": np.nan,
                     "p_value": np.nan,
                     "r_squared": np.nan,
-                    "adj_r_squared": np.nan,
+                    #"adj_r_squared": np.nan,
                     "n_obs": int(x_col.notna().sum()),
                     "mean_x": float(x_col.mean(skipna=True)),
                     "mean_y": float(y.mean(skipna=True)),
@@ -240,8 +255,8 @@ def run_bivariate_regression(
             mm_rows.append(
                 {
                     "model_name": LINEAR_MODEL_NAME,
-                    "transformation": transformation_label_mm,         
-                    "target": y.name, 
+                    "transformation": transformation_label_mm,
+                    "target": y.name,
                     "original_variable": _extract_original_name(col),
                     "encoded_variable": col,
                     "coef": float(coef),
@@ -249,8 +264,9 @@ def run_bivariate_regression(
                     "std_err": float(std_err),
                     "t_value": float(t_value),
                     "p_value": float(p_value),
-                    "r_squared": r2,
-                    "adj_r_squared": adj_r2,
+                    #"r_squared": r2,
+                    "r_squared": adj_r2,
+                    #"adj_r_squared": adj_r2,
                     "n_obs": int(len(y_clean)),
                     "mean_x": mean_x,
                     "mean_y": mean_y,
@@ -262,8 +278,8 @@ def run_bivariate_regression(
             mm_rows.append(
                 {
                     "model_name": LINEAR_MODEL_NAME,
-                    "transformation": transformation_label_mm,         
-                    "target": y.name, 
+                    "transformation": transformation_label_mm,
+                    "target": y.name,
                     "original_variable": _extract_original_name(col),
                     "encoded_variable": col,
                     "coef": np.nan,
@@ -272,7 +288,7 @@ def run_bivariate_regression(
                     "t_value": np.nan,
                     "p_value": np.nan,
                     "r_squared": np.nan,
-                    "adj_r_squared": np.nan,
+                    #"adj_r_squared": np.nan,
                     "n_obs": int(x_col.notna().sum()),
                     "mean_x": float(x_col.mean(skipna=True)),
                     "mean_y": float(y.mean(skipna=True)),
@@ -285,13 +301,18 @@ def run_bivariate_regression(
 
     if "p_value" in mm_df.columns:
         mm_df["__p_sort__"] = mm_df["p_value"].fillna(1e9)
-        mm_df = mm_df.sort_values("__p_sort__").drop(columns="__p_sort__").reset_index(drop=True)
+        mm_df = (
+            mm_df.sort_values("__p_sort__")
+            .drop(columns="__p_sort__")
+            .reset_index(drop=True)
+        )
 
-    mm_path = out_dir / "regression_linear_coefficients_minmax.csv"
-    mm_df.to_csv(mm_path, index=False)
-    print(f"Saved OLS regression coefficients (MIN-MAX, BIVARIATE) to: {mm_path}")
-
+    mm_path = out_dir / "driver_analysis_coefficients_minmax.csv"
+    mm_df_final = mm_df[LINEAR_FINAL_COLS]
+    mm_df_final.to_csv(mm_path, index=False)
+    print(f"Saved driver analysis coefficients (MIN-MAX) to: {mm_path}")
     return raw_df, mm_df
+
 
 def run_bivariate_logistic(
     X_raw: pd.DataFrame,
@@ -304,7 +325,6 @@ def run_bivariate_logistic(
     out_dir = _ensure_dir(output_dir)
 
     X_raw = X_raw.copy()
-    #y = pd.Series(y, name=target_name)
     y = pd.Series(y).rename(target_name)
 
     uniq = sorted(y.dropna().unique().tolist())
@@ -320,7 +340,7 @@ def run_bivariate_logistic(
             rows.append(
                 {
                     "model_name": LOGISTIC_MODEL_NAME,
-                    "transformation": transformation_label,       
+                    "transformation": transformation_label,
                     "target": y.name,
                     "original_variable": _extract_original_name(col),
                     "encoded_variable": col,
@@ -329,7 +349,8 @@ def run_bivariate_logistic(
                     "std_err": np.nan,
                     "z_value": np.nan,
                     "p_value": np.nan,
-                    "pseudo_r_squared": np.nan,
+                    #"pseudo_r_squared": np.nan,
+                    "r_squared": np.nan,
                     "n_obs": int(x_col.notna().sum()),
                     "mean_x": float(x_col.mean(skipna=True)),
                     "mean_y": float(y.mean(skipna=True)),
@@ -362,7 +383,7 @@ def run_bivariate_logistic(
             rows.append(
                 {
                     "model_name": LOGISTIC_MODEL_NAME,
-                    "transformation": transformation_label,       
+                    "transformation": transformation_label,
                     "target": y.name,
                     "original_variable": _extract_original_name(col),
                     "encoded_variable": col,
@@ -371,7 +392,8 @@ def run_bivariate_logistic(
                     "std_err": float(std_err),
                     "z_value": float(z_value),
                     "p_value": float(p_value),
-                    "pseudo_r_squared": pseudo_r2,
+                    #"pseudo_r_squared": pseudo_r2,
+                    "r_squared": pseudo_r2,
                     "n_obs": int(len(y_clean)),
                     "mean_x": float(X_clean[col].mean(skipna=True)),
                     "mean_y": float(y_clean.mean(skipna=True)),
@@ -382,7 +404,7 @@ def run_bivariate_logistic(
             rows.append(
                 {
                     "model_name": LOGISTIC_MODEL_NAME,
-                    "transformation": transformation_label,      
+                    "transformation": transformation_label,
                     "target": y.name,
                     "original_variable": _extract_original_name(col),
                     "encoded_variable": col,
@@ -391,7 +413,8 @@ def run_bivariate_logistic(
                     "std_err": np.nan,
                     "z_value": np.nan,
                     "p_value": np.nan,
-                    "pseudo_r_squared": np.nan,
+                    #"pseudo_r_squared": np.nan,
+                    "r_squared": np.nan,
                     "n_obs": int(x_col.notna().sum()),
                     "mean_x": float(x_col.mean(skipna=True)),
                     "mean_y": float(y.mean(skipna=True)),
@@ -403,9 +426,19 @@ def run_bivariate_logistic(
 
     if "p_value" in df.columns:
         df["__p_sort__"] = df["p_value"].fillna(1e9)
-        df = df.sort_values("__p_sort__").drop(columns="__p_sort__").reset_index(drop=True)
+        df = (
+            df.sort_values("__p_sort__")
+            .drop(columns="__p_sort__")
+            .reset_index(drop=True)
+        )
 
-    out_path = out_dir / f"classification_logistic_coefficients{file_suffix}.csv"
-    df.to_csv(out_path, index=False)
-    print(f"Saved Logistic regression coefficients to: {out_path}")
+    if transformation_label == "min-max":
+        out_path = out_dir / "driver_analysis_coefficients_minmax.csv"
+    else:
+        out_path = out_dir / "driver_analysis_coefficients.csv"
+
+    df_final = df[LOGISTIC_FINAL_COLS]
+    df_final.to_csv(out_path, index=False)
+    print(f"Saved driver analysis coefficients (Logistic, {transformation_label}) to: {out_path}")
+
     return df
