@@ -20,56 +20,35 @@ from reportlab.platypus import (
 )
 from reportlab.lib.styles import getSampleStyleSheet
 
-os.environ["OPENAI_API_KEY"] = # enter open ai key
+os.environ["OPENAI_API_KEY"] = #enter your open ai key
 
-# Auto-detect latest outputs run folder
 ROOT_OUTPUTS = Path(__file__).resolve().parent / "outputs"
 
-def find_latest_run(outputs_root: Path) -> Path:
-    subdirs = [d for d in outputs_root.iterdir() if d.is_dir()]
-    if not subdirs:
-        raise FileNotFoundError("No run folders inside outputs/")
-    return max(subdirs, key=lambda d: d.name)
+OUT_DIR = ROOT_OUTPUTS / "driver_analysis"
+OUT_DIR2 = ROOT_OUTPUTS / "shap"
 
-LATEST_RUN = find_latest_run(ROOT_OUTPUTS)
-
-OUT_DIR = LATEST_RUN / "driver_analysis"
-OUT_DIR2 = LATEST_RUN / "shap"
+OUT_DIR.mkdir(parents=True, exist_ok=True)
+OUT_DIR2.mkdir(parents=True, exist_ok=True)
 
 PDF_NAME = "analysis_summary.pdf"
 FIXED_TIMESTAMP = "© 2025 | Catalytics Datum. Pvt. Ltd."
 
-# All SHAP summary images
 IMAGE_FILES = [
-    OUT_DIR2 / "classification_shap_summary_raw.png",
-    OUT_DIR2 / "classification_shap_summary_minmax.png",
-    OUT_DIR2 / "regression_shap_summary_raw.png",
-    OUT_DIR2 / "regression_shap_summary_minmax.png",
+    OUT_DIR2 / "shap_summary.png",
+    OUT_DIR2 / "shap_summary_minmax.png",
 ]
 
-# Map of all required CSVs
 CSV_FILES = {
-    # Classification SHAP aggregates
-    "Classification SHAP Aggregate – Raw": OUT_DIR2 / "classification_shap_aggregate_raw.csv",
-    "Classification SHAP Aggregate – MinMax": OUT_DIR2 / "classification_shap_aggregate_minmax.csv",
+    # SHAP aggregates
+    "SHAP Aggregate – Raw": OUT_DIR2 / "shap_aggregate.csv",
+    "SHAP Aggregate – MinMax": OUT_DIR2 / "shap_aggregate_minmax.csv",
 
-    # Regression SHAP aggregates
-    "Regression SHAP Aggregate – Raw": OUT_DIR2 / "regression_shap_aggregate_raw.csv",
-    "Regression SHAP Aggregate – MinMax": OUT_DIR2 / "regression_shap_aggregate_minmax.csv",
-
-    # Regression coefficients
-    "Regression Coefficients – Raw": OUT_DIR / "regression_linear_coefficients.csv",
-    "Regression Coefficients – MinMax": OUT_DIR / "regression_linear_coefficients_minmax.csv",
-
-    # Classification coefficients
-    "Classification Logistic Coefficients – Raw": OUT_DIR / "classification_logistic_coefficients.csv",
-    "Classification Logistic Coefficients – MinMax": OUT_DIR / "classification_logistic_coefficients_minmax.csv",
+    # Driver analysis coefficients
+    "Driver Analysis Coefficients – Raw": OUT_DIR / "driver_analysis_coefficients.csv",
+    "Driver Analysis Coefficients – MinMax": OUT_DIR / "driver_analysis_coefficients_minmax.csv",
 }
 
-
-# Optional: keep chart-level narrative for reuse (e.g., Power BI)
 CHART_NARRATIVE_ROWS = []
-
 
 def get_openai_client():
     key = os.getenv("OPENAI_API_KEY")
@@ -623,12 +602,12 @@ if __name__ == "__main__":
 
     save_enriched_tables_for_powerbi(dfs, CSV_FILES)
 
-    pdf_path = LATEST_RUN / PDF_NAME
+    pdf_path = ROOT_OUTPUTS / PDF_NAME
     build_pdf_report(pdf_path, images, dfs, global_context)
     print("Saved PDF:", pdf_path.resolve())
 
     if CHART_NARRATIVE_ROWS:
         narr_df = pd.DataFrame(CHART_NARRATIVE_ROWS)
-        narr_csv_path = LATEST_RUN / "chart_narrative.csv"
+        narr_csv_path = ROOT_OUTPUTS / "chart_narrative.csv"
         narr_df.to_csv(narr_csv_path, index=False)
         print("Saved chart-level narrative:", narr_csv_path.resolve())
