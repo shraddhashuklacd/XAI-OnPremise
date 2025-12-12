@@ -97,8 +97,10 @@ class ExplainableModelRunner:
         self.X_minmax: Optional[pd.DataFrame] = None
 
         # Output dirs
-        self.run_id: str = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.output_dir: Path = Path(OUTPUT_DIR) / self.run_id
+        # self.run_id: str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # self.output_dir: Path = Path(OUTPUT_DIR) / self.run_id
+        self.run_id: str = "latest"
+        self.output_dir: Path = Path(OUTPUT_DIR)
         (self.output_dir / "data").mkdir(parents=True, exist_ok=True)
         (self.output_dir / "driver_analysis").mkdir(parents=True, exist_ok=True)
 
@@ -122,7 +124,7 @@ class ExplainableModelRunner:
             df = df.copy()
             df.columns = new_cols
 
-        df.to_csv(save_path, index=False)
+        df.to_csv(save_path, index=False, encoding="utf-8-sig")
         print(f"Saved CSV: {save_path}")
 
     def select_target_column(self) -> None:
@@ -148,9 +150,6 @@ class ExplainableModelRunner:
 
         print("Raw Data:\n")
         print(self.df_raw.head(), "\n")
-
-        
-
 
     def detect_feature_types(self) -> None:
         if self.df_raw is None:
@@ -322,6 +321,26 @@ class ExplainableModelRunner:
 
         model_name = "LogisticRegression" if self.problem_type == "classification" else "LinearRegression"
 
+        # Landing Page Metadata
+
+        about_explainable_ai = (
+            "Explainable AI (XAI) in predictive modeling provides clear, human-"
+            "understandable reasons behind a model’s predictions, moving beyond "
+            "black-box approaches to explain why a decision was made, not just "
+            "what the outcome is."
+        )
+
+        about_dashboard = (
+            "1. Estimation of Impact – % change in KPI if 1% change in KBD\n"
+            "2. Splitting Relative Importance of business drivers against "
+            "controllable vs. uncontrollable factors\n"
+            "3. Rank-ordering the KBDs in terms of impact, significance and importance"
+        )
+
+        record_count = int(self.df_raw.shape[0])
+        column_count = int(self.df_raw.shape[1] - 1)  # excluding target
+
+
         metadata_df = pd.DataFrame([
             {
                 "Dataset": dataset_name,
@@ -330,6 +349,10 @@ class ExplainableModelRunner:
                 "DataDescription": data_description_text,
                 "model_name": model_name,
                 "transformation": "original",
+                "about_xai": about_explainable_ai,
+                "about_dashboard": about_dashboard,
+                "records": record_count,
+                "columns": column_count,
             },
             {
                 "Dataset": dataset_name,
@@ -338,8 +361,13 @@ class ExplainableModelRunner:
                 "DataDescription": data_description_text,
                 "model_name": model_name,
                 "transformation": "min-max",
+                "about_xai": about_explainable_ai,
+                "about_dashboard": about_dashboard,
+                "records": record_count,
+                "columns": column_count,
             }
         ])
+
 
         meta_path = self.output_dir / "data" / "data_description.csv"
         self._save_table(metadata_df, meta_path)
@@ -468,7 +496,7 @@ class ExplainableModelRunner:
         X_raw = self.X_raw
         y = self.y
 
-        prefix = f"{self.problem_type}_shap"
+        prefix = "shap"
 
         
         if max_rows is None:
@@ -507,11 +535,6 @@ class ExplainableModelRunner:
         shap_df_mm.insert(2, "target", self.target_col)
         shap_df_mm.to_csv(shap_dir / f"{prefix}_values_minmax.csv", index=False)
 
-        
-        # agg_mm = _build_shap_aggregate_table(
-        #     shap_values_mm,
-        #     feature_names=X_mm_sample.columns.tolist(),
-        # )
 
         agg_mm = _build_shap_aggregate_table(
             shap_values_mm,
@@ -556,13 +579,8 @@ class ExplainableModelRunner:
                    "LogisticRegression" if self.problem_type == "classification" else "LinearRegression")
         shap_df_raw.insert(1, "transformation", "original")
         shap_df_raw.insert(2, "target", self.target_col)
-        shap_df_raw.to_csv(shap_dir / f"{prefix}_values_raw.csv", index=False)
+        shap_df_raw.to_csv(shap_dir / f"{prefix}_values.csv", index=False)
         
-        # agg_raw = _build_shap_aggregate_table(
-        #     shap_values_raw,
-        #     feature_names=X_raw_sample.columns.tolist(),
-        # )
-
         agg_raw = _build_shap_aggregate_table(
             shap_values_raw,
             feature_names=X_raw_sample.columns.tolist(),
@@ -570,13 +588,13 @@ class ExplainableModelRunner:
             transformation="original",
             target=self.target_col,
         )
-        agg_raw.to_csv(shap_dir / f"{prefix}_aggregate_raw.csv", index=False)
+        agg_raw.to_csv(shap_dir / f"{prefix}_aggregate.csv", index=False)
 
         
         plt.figure()
         shap.summary_plot(shap_values_raw, X_raw_sample, show=False)
         plt.tight_layout()
-        plt.savefig(shap_dir / f"{prefix}_summary_raw.png", bbox_inches="tight")
+        plt.savefig(shap_dir / f"{prefix}_summary.png", bbox_inches="tight")
         plt.close()
 
         print(f"SHAP values and summary plots saved under: {shap_dir}")
